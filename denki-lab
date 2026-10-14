@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<title>でんき回路ラボ 試作</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap">
+<style>
+html,body{margin:0}
+/* 1画面のゲーム。ドット絵の世界に合わせて紺一色の単一テーマ */
+:root{
+  --bg:#141c40; --frame:#0b1230; --fg:#f2f4fb; --muted:#aab4dc; --volt:#f8e800; --ink:#101018;
+  --pixel:"DotGothic16","Hiragino Maru Gothic ProN",system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--pixel);margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:20px 32px;display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.stage{position:relative;width:100%;min-width:0;aspect-ratio:16/9;max-width:100%;background:var(--frame);border:3px solid var(--ink);box-shadow:0 0 0 3px var(--fg),0 0 0 6px var(--ink)}
+canvas{display:block;width:100%;height:100%;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none;cursor:pointer}
+canvas:focus-visible{outline:3px solid var(--volt);outline-offset:4px}
+.how{display:flex;flex-wrap:wrap;gap:8px 22px;font-size:15px;color:var(--muted);line-height:1.6}
+.how b{color:var(--volt);font-weight:400}
+h1{font-size:20px;font-weight:400;margin:0;letter-spacing:.04em}
+h1 span{color:var(--muted);font-size:14px;margin-left:10px}
+body.demo .wrap{padding:0;max-width:none}
+body.demo .stage{border:0;box-shadow:none}
+body.demo h1,body.demo .how{display:none}
+@media (prefers-reduced-motion:reduce){canvas{cursor:default}}
+</style>
+
+<div class="wrap">
+  <h1>エネリとボルルの でんき実験ラボ<span>回路つなぎラボ・試作版</span></h1>
+  <div class="stage"><canvas id="game" width="960" height="540" tabindex="0" aria-label="回路つなぎパズル。点と点をなぞって導線をひき、電球をつけるゲーム"></canvas></div>
+  <div class="how">
+    <span><b>なぞる</b>　点から点へ どうせんを ひく</span>
+    <span><b>タップ</b>　どうせんを けす／スイッチを入れる</span>
+    <span><b>めあて</b>　電球を つけて「明るさ ★★★」を めざそう</span>
+  </div>
+</div>
+
+<script>
+(() => {
+const BG_SRC = "data:image/png;base64,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";
+const S = 2, UW = 480, UH = 270;
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+const params = new URLSearchParams(location.search);
+const DEMO = params.has('demo');
+if (DEMO) document.body.classList.add('demo');
+
+const COL = {ink:'#101018', white:'#f8f8f8', yel:'#f8e800', yel2:'#f8b800', org:'#f89e00', red:'#f85054', red2:'#c03038',
+  gry:'#c8c8d0', gry2:'#8c8c98', gry3:'#e8e8f0', navy:'#1c2a64', navy2:'#2a3e8c', cyan:'#48d0e0', grn:'#58c838',
+  muted:'#c0ccff', cap:'#fff8c0', bulbOff:'#d4dbe6', bulbOn:'#fff8b0', pcb:'#2a9a5c'};
+
+// ---------- ドット描画 ----------
+function R(x, y, w, h, c){ ctx.fillStyle = c; ctx.fillRect(Math.round(x)*S, Math.round(y)*S, Math.round(w)*S, Math.round(h)*S); }
+function box(x0, y0, x1, y1, fill, hi, sh){
+  R(x0, y0, x1-x0+1, y1-y0+1, COL.ink); R(x0+1, y0+1, x1-x0-1, y1-y0-1, fill);
+  if (hi){ R(x0+1, y0+1, x1-x0-1, 1, hi); R(x0+1, y0+1, 1, y1-y0-1, hi); }
+  if (sh){ R(x0+1, y1-1, x1-x0-1, 1, sh); R(x1-1, y0+1, 1, y1-y0-1, sh); }
+}
+function rbox(x0, y0, x1, y1, fill, hi, sh){
+  box(x0, y0, x1, y1, fill, hi, sh);
+  ctx.clearRect(x0*S, y0*S, S, S); ctx.clearRect(x1*S, y0*S, S, S); ctx.clearRect(x0*S, y1*S, S, S); ctx.clearRect(x1*S, y1*S, S, S);
+}
+function disc(cx, cy, r, c){
+  for (let dy = -r; dy <= r; dy++){ const w = Math.floor(Math.sqrt(r*r - dy*dy + r*.8)); R(cx-w, cy+dy, 2*w+1, 1, c); }
+}
+function ring(cx, cy, r, fill){ disc(cx, cy, r, COL.ink); disc(cx, cy, r-1, fill); }
+function thick(x0, y0, x1, y1, w, c){
+  const n = Math.max(Math.abs(x1-x0), Math.abs(y1-y0)) || 1;
+  for (let k = 0; k <= n; k++){ const x = x0 + (x1-x0)*k/n, y = y0 + (y1-y0)*k/n; R(x - (w>>1), y - (w>>1), w, w, c); }
+}
+function wireSeg(x0, y0, x1, y1){
+  const xa = Math.min(x0,x1), xb = Math.max(x0,x1), ya = Math.min(y0,y1), yb = Math.max(y0,y1);
+  R(xa-3, ya-3, xb-xa+6, yb-ya+6, COL.ink); R(xa-2, ya-2, xb-xa+4, yb-ya+4, COL.yel2); R(xa-1, ya-1, xb-xa+2, yb-ya+2, COL.yel);
+}
+let FONT = '"DotGothic16","Hiragino Maru Gothic ProN",sans-serif';
+function txt(x, y, s, size, c = COL.white, align = 'left', outline = null){
+  ctx.font = `${size*S}px ${FONT}`; ctx.textAlign = align; ctx.textBaseline = 'top';
+  if (outline){ ctx.lineWidth = 4; ctx.strokeStyle = outline; ctx.lineJoin = 'round'; ctx.strokeText(s, x*S, y*S); }
+  ctx.fillStyle = c; ctx.fillText(s, x*S, y*S);
+}
+const BAYER = [[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
+const glowCache = {};
+function glowSprite(level){
+  if (glowCache[level]) return glowCache[level];
+  const r = 12 + level*5, c = document.createElement('canvas');
+  c.width = c.height = (2*r+1)*S; const g = c.getContext('2d'); g.fillStyle = 'rgba(255,250,170,.62)';
+  for (let y = -r; y <= r; y++) for (let x = -r; x <= r; x++){
+    const d = Math.hypot(x, y)/r; if (d > 1) continue;
+    if (BAYER[(y+64)%4][(x+64)%4] < (1-d)*(5+level*1.6)) g.fillRect((x+r)*S, (y+r)*S, S, S);
+  }
+  return glowCache[level] = {c, r};
+}
+
+// ---------- 盤面とステージ ----------
+const GX = i => 34 + 24*i, GY = j => 58 + 24*j, NI = 9, NJ = 6;
+const nid = (i, j) => j*NI + i;
+const STAGES = [
+  {title:'お題：電球を つけよう', limit:16,
+   parts:[{type:'bat', a:[1,5], b:[3,5]}, {type:'bulb', a:[3,1], b:[5,1]}, {type:'sw', a:[5,5], b:[7,5]}],
+   intro:['でんちの ＋と−を、どうせんで ぐるっと つなごう。', '点から点へ なぞると、どうせんが ひけるよ。']},
+  {title:'お題：2つの電球を おなじ明るさで つけよう', limit:22,
+   parts:[{type:'bat', a:[1,5], b:[3,5]}, {type:'bulb', a:[3,1], b:[5,1]}, {type:'bulb', a:[3,3], b:[5,3]}, {type:'sw', a:[5,5], b:[7,5]}],
+   intro:['こんどは 電球が2つ。どっちも 明るく できるかな？', 'スイッチを 入れるのも わすれずにね。']},
+];
+const V_BAT = 1.5, R_INT = .05, G_WIRE = 1000, G_BULB = 1;
+
+const st = {stage:0, wires:new Set(), swOn:false, cleared:[false,false], clearAt:-1, sol:null, msg:null, hover:null, cursor:null};
+
+function edgeKey(i, j, dir){ return `${i},${j},${dir}`; }
+function edgeEnds(k){ const [i,j,d] = k.split(','); const a = [+i, +j]; return [a, d === 'h' ? [+i+1, +j] : [+i, +j+1]]; }
+function blockedSet(stage){
+  const blocked = new Set(), interior = new Set();
+  for (const p of STAGES[stage].parts){
+    const [ai, aj] = p.a, [bi, bj] = p.b;
+    if (aj === bj){ for (let i = ai; i < bi; i++) blocked.add(edgeKey(i, aj, 'h')); for (let i = ai+1; i < bi; i++) interior.add(nid(i, aj)); }
+    else { for (let j = aj; j < bj; j++) blocked.add(edgeKey(ai, j, 'v')); for (let j = aj+1; j < bj; j++) interior.add(nid(ai, j)); }
+  }
+  return {blocked, interior};
+}
+function validEdge(k){
+  const [a, b] = edgeEnds(k);
+  if (a[0] < 0 || a[1] < 0 || b[0] >= NI || b[1] >= NJ) return false;
+  const {blocked, interior} = blockedSet(st.stage);
+  return !blocked.has(k) && !interior.has(nid(...a)) && !interior.has(nid(...b));
+}
+
+// ---------- 回路の計算（節点解析） ----------
+function solve(swOn){
+  const N = NI*NJ, G = Array.from({length:N}, () => new Float64Array(N)), I = new Float64Array(N);
+  const add = (a, b, g) => { G[a][a] += g; G[b][b] += g; G[a][b] -= g; G[b][a] -= g; };
+  const elems = [];
+  for (const k of st.wires){ const [a, b] = edgeEnds(k); add(nid(...a), nid(...b), G_WIRE); elems.push({kind:'wire', a, b, g:G_WIRE}); }
+  let bat = null;
+  for (const p of STAGES[st.stage].parts){
+    const a = nid(...p.a), b = nid(...p.b);
+    if (p.type === 'bulb'){ add(a, b, G_BULB); elems.push({kind:'bulb', a:p.a, b:p.b, g:G_BULB, part:p}); }
+    if (p.type === 'sw' && swOn){ add(a, b, G_WIRE); elems.push({kind:'sw', a:p.a, b:p.b, g:G_WIRE}); }
+    if (p.type === 'bat'){ add(a, b, 1/R_INT); I[b] += V_BAT/R_INT; I[a] -= V_BAT/R_INT; bat = {a, b, pa:p.a, pb:p.b}; }
+  }
+  const g0 = bat.a, idx = [], map = new Int32Array(N).fill(-1);
+  for (let n = 0; n < N; n++) if (n !== g0){ map[n] = idx.length; idx.push(n); }
+  const M = idx.length, A = idx.map(n => { const row = new Float64Array(M+1); idx.forEach((m, c) => row[c] = G[n][m]); row[map[n]] += 1e-6; row[M] = I[n]; return row; });
+  for (let c = 0; c < M; c++){
+    let p = c; for (let r = c+1; r < M; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]];
+    const piv = A[c][c]; if (Math.abs(piv) < 1e-12) continue;
+    for (let r = c+1; r < M; r++){ const f = A[r][c]/piv; if (f) for (let k = c; k <= M; k++) A[r][k] -= f*A[c][k]; }
+  }
+  const x = new Float64Array(M);
+  for (let r = M-1; r >= 0; r--){ let s = A[r][M]; for (let k = r+1; k < M; k++) s -= A[r][k]*x[k]; x[r] = Math.abs(A[r][r]) < 1e-12 ? 0 : s/A[r][r]; }
+  const V = new Float64Array(N); idx.forEach((n, r) => V[n] = x[r]);
+  const ibat = (V_BAT - (V[bat.b] - V[bat.a]))/R_INT;
+  for (const e of elems) e.i = (V[nid(...e.a)] - V[nid(...e.b)])*e.g;
+  elems.push({kind:'bat', a:bat.pa, b:bat.pb, i:-ibat});
+  const bulbs = elems.filter(e => e.kind === 'bulb').map(e => ({part:e.part, p:e.i*e.i/G_BULB}));
+  return {elems, bulbs, ibat, short: ibat > 8};
+}
+const stars = p => p > 1.2 ? 3 : p > .3 ? 1 : 0;
+
+function evaluate(now){
+  const sol = st.sol = solve(st.swOn);
+  const lit = sol.bulbs.map(b => stars(b.p));
+  const S0 = STAGES[st.stage];
+  let msg = {who:'エネリ', lines:S0.intro, bor:null};
+  const wasCleared = st.cleared[st.stage];
+  if (sol.short) msg = {who:'ボルル', lines:['ショート！ 電球を 通らずに 電池が つながってるよ。', 'あぶないから、どうせんを 1本 けしてみて。'], bor:'ビリビリ！'};
+  else if (lit.every(s => s === 0) && !st.swOn && solve(true).bulbs.some(b => stars(b.p) > 0))
+    msg = {who:'エネリ', lines:['通り道は できてるよ。', 'スイッチを おして 入れてみよう！'], bor:'スイッチ！'};
+  else if (st.stage === 0 && lit[0] > 0){
+    msg = {who:'エネリ', lines:['ついた！ でんきの 通り道が ぐるっと 1しゅう つながったね。', '「つぎへ」で ステージ2に いこう。'], bor:'やったね！'};
+    st.cleared[0] = true;
+  } else if (st.stage === 1){
+    if (lit.every(s => s === 3)){
+      msg = {who:'エネリ', lines:['へいれつに つなぐと、どっちも おなじ明るさだね！', 'でんきの 通り道が 2本 あるからだよ。'], bor:'やったね！'};
+      st.cleared[1] = true;
+    } else if (lit.every(s => s > 0)) msg = {who:'エネリ', lines:['2つとも ついたけど、ちょっと 暗いね…。', '通り道を 2本に 分けると どうなるかな？'], bor:null};
+    else if (lit.some(s => s > 0)) msg = {who:'エネリ', lines:['かたほうだけ ついたね。', 'もう1つの 電球にも 通り道を つくろう。'], bor:null};
+  }
+  if (!wasCleared && st.cleared[st.stage]) st.clearAt = now;
+  st.msg = msg;
+}
+
+// ---------- 描画 ----------
+const bg = new Image(); bg.src = BG_SRC;
+function drawBulb(p, power, t){
+  const y = GY(p.a[1]), x0 = GX(p.a[0]), x1 = GX(p.b[0]), cx = (x0+x1)/2, on = power > .02;
+  if (on){ const lvl = Math.min(6, Math.max(1, Math.round(power*3))); const g = glowSprite(lvl); ctx.globalAlpha = Math.min(1, .45 + power*.3); ctx.drawImage(g.c, (cx - g.r)*S, (y - 10 - g.r)*S); ctx.globalAlpha = 1; }
+  wireSeg(x0, y, x1, y);
+  box(cx-8, y-4, cx+8, y+6, COL.gry, COL.gry3, COL.gry2); R(cx-7, y-1, 15, 1, COL.gry2); R(cx-7, y+2, 15, 1, COL.gry2);
+  ring(cx, y-15, 12, on ? COL.bulbOn : COL.bulbOff);
+  disc(cx-5, y-20, 3, COL.white);
+  const fc = on ? COL.org : COL.gry2;
+  thick(cx-6, y-11, cx-3, y-17, 1, fc); thick(cx-3, y-17, cx, y-11, 1, fc); thick(cx, y-11, cx+3, y-17, 1, fc); thick(cx+3, y-17, cx+6, y-11, 1, fc);
+  if (on && power > 1.2){ const tw = Math.floor(t*4)%2; for (const [sx, sy] of [[cx-17, y-26], [cx+16, y-22], [cx-15, y-2]]){ const r = tw ? 2 : 1; R(sx-r, sy, 2*r+1, 1, COL.white); R(sx, sy-r, 1, 2*r+1, COL.white); } }
+  const n = stars(power);
+  txt(cx + 16, y - 33, '明るさ', 8, COL.white, 'left', COL.ink);
+  for (let k = 0; k < 3; k++) drawStar(cx + 22 + k*11, y - 13, k < n);
+}
+function drawStar(cx, cy, fill){
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++){ const a = -Math.PI/2 + i*Math.PI/5, r = (i%2 ? 2.4 : 5.4)*S; ctx.lineTo(cx*S + r*Math.cos(a), cy*S + r*Math.sin(a)); }
+  ctx.closePath(); ctx.fillStyle = fill ? COL.yel : '#2a6a48'; ctx.fill(); ctx.lineWidth = S; ctx.strokeStyle = COL.ink; ctx.stroke();
+}
+function drawBattery(p){
+  const y = GY(p.a[1]), x0 = GX(p.a[0]), x1 = GX(p.b[0]);
+  wireSeg(x0, y, x1, y);
+  box(x0+4, y-10, x1-4, y+10, COL.red, '#ff9090', COL.red2);
+  box(x1-16, y-10, x1-4, y+10, COL.gry3, null, COL.gry);
+  box(x1-4, y-4, x1, y+4, COL.gry, null, COL.gry2);
+  R(x0+12, y-1, 13, 3, COL.white); R(x0+17, y-6, 3, 13, COL.white);
+  txt(x0-1, y+7, '−', 9, COL.white, 'right', COL.ink); txt(x1+2, y+7, '＋', 9, COL.white, 'left', COL.ink);
+}
+function drawSwitch(p, on){
+  const y = GY(p.a[1]), x0 = GX(p.a[0]), x1 = GX(p.b[0]);
+  wireSeg(x0, y, x0+5, y); wireSeg(x1-5, y, x1, y);
+  box(x0+4, y-9, x1-4, y+9, '#404058', '#606080');
+  ring(x0+11, y, 3, '#e0b850'); ring(x1-11, y, 3, '#e0b850');
+  if (on){ thick(x0+11, y, x1-11, y, 4, COL.ink); thick(x0+11, y, x1-11, y, 2, COL.cyan); }
+  else { thick(x0+11, y, x1-15, y-12, 4, COL.ink); thick(x0+11, y, x1-15, y-12, 2, COL.cyan); }
+  ring(x1-2, y-14, 4, on ? COL.grn : COL.red);
+  txt((x0+x1)/2, y+11, on ? 'ON' : 'OFF', 8, on ? COL.yel : COL.white, 'center', COL.ink);
+}
+function drawElectrons(t){
+  for (const e of st.sol.elems){
+    const I = Math.abs(e.i); if (I < .05 || st.sol.short && e.kind !== 'wire' && e.kind !== 'bat') continue;
+    const [a, b] = e.i >= 0 ? [e.a, e.b] : [e.b, e.a];
+    const x0 = GX(a[0]), y0 = GY(a[1]), x1 = GX(b[0]), y1 = GY(b[1]), L = Math.hypot(x1-x0, y1-y0);
+    const off = (t * 26 * Math.min(I, 2.6)) % 12;
+    for (let s = off; s < L; s += 12){
+      const x = x0 + (x1-x0)*s/L, y = y0 + (y1-y0)*s/L;
+      if (e.kind === 'bulb' && Math.abs(x - (x0+x1)/2) < 9) continue;
+      if (e.kind === 'bat' && Math.abs(x - (x0+x1)/2) < 20) continue;
+      R(x-1, y-1, 2, 2, st.sol.short ? COL.red : COL.white);
+    }
+  }
+}
+function drawHand(x, y, pressed){
+  const P = [
+    '..KK......', '.KWWK.....', '.KWWK.....', '.KWWKKKK..', '.KWWKWWKKK', 'KKWWWWWKWK', 'KWKWWWWWWK', 'KWWWWWWWWK', '.KWWWWWWK.', '..KKKKKK..'];
+  const dy = pressed ? 1 : 0;
+  P.forEach((row, j) => [...row].forEach((ch, i) => { if (ch !== '.') R(x + 2*i - 5, y + 2*j + dy, 2, 2, ch === 'K' ? COL.ink : COL.white); }));
+  if (pressed){ R(x-8, y-2, 3, 1, COL.yel); R(x+6, y-4, 1, 3, COL.yel); R(x-4, y-7, 1, 3, COL.yel); }
+}
+function draw(t){
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  if (bg.complete) ctx.drawImage(bg, 0, 0, UW*S, UH*S);
+  const sol = st.sol, stg = STAGES[st.stage];
+  // 導線
+  const deg = new Map();
+  const bump = n => deg.set(n, (deg.get(n) || 0) + 1);
+  for (const k of st.wires){ const [a, b] = edgeEnds(k); wireSeg(GX(a[0]), GY(a[1]), GX(b[0]), GY(b[1])); bump(nid(...a)); bump(nid(...b)); }
+  const term = new Set(); for (const p of stg.parts){ bump(nid(...p.a)); bump(nid(...p.b)); term.add(nid(...p.a)); term.add(nid(...p.b)); }
+  // ホバーのプレビュー
+  if (st.hover && !DEMO){
+    const [a, b] = edgeEnds(st.hover), has = st.wires.has(st.hover);
+    ctx.globalAlpha = .7;
+    const xa = Math.min(GX(a[0]), GX(b[0])), xb = Math.max(GX(a[0]), GX(b[0])), ya = Math.min(GY(a[1]), GY(b[1])), yb = Math.max(GY(a[1]), GY(b[1]));
+    if (has) R(xa-3, ya-3, xb-xa+6, yb-ya+6, COL.red);
+    else for (let s = 0; s <= Math.max(xb-xa, yb-ya); s += 4) R(xa + (xb>xa ? s : 0) - 1, ya + (yb>ya ? s : 0) - 1, 2, 2, COL.white);
+    ctx.globalAlpha = 1;
+  }
+  const power = new Map(sol.bulbs.map(b => [b.part, b.p]));
+  for (const p of stg.parts){
+    if (p.type === 'bulb') drawBulb(p, sol.short ? 0 : power.get(p), t);
+    if (p.type === 'bat') drawBattery(p);
+    if (p.type === 'sw') drawSwitch(p, st.swOn);
+  }
+  for (const [n, d] of deg) if (d !== 2 || term.has(n)) ring(34 + 24*(n % NI), 58 + 24*Math.floor(n / NI), 4, COL.cap);
+  drawElectrons(t);
+  if (sol.short && Math.floor(t*6) % 2){ const bt = stg.parts[0]; txt((GX(bt.a[0]) + GX(bt.b[0]))/2, GY(bt.a[1]) - 26, 'ショート！', 11, COL.red, 'center', COL.white); }
+
+  // 上のHUD
+  txt(40, 11.5, `STAGE ${st.stage+1}`, 10, COL.ink, 'center');
+  txt(74, 10, stg.title, 11);
+  txt(336, 9, `クリア ${st.cleared.filter(Boolean).length} / 2`, 12);
+  // トレイ
+  const left = stg.limit - st.wires.size;
+  txt(273, 51, 'どうせん', 8, COL.yel, 'center');
+  txt(273, 84, 'のこり', 8, COL.muted, 'center');
+  txt(273, 94, String(left), 16, left > 0 ? COL.white : COL.red, 'center');
+  rbox(255, 140, 291, 158, COL.white, null, COL.gry); txt(273, 144, 'リセット', 8, COL.ink, 'center');
+  if (st.cleared[st.stage]){ const b = Math.floor(t*3) % 2; rbox(255, 163 - b, 291, 183 - b, COL.yel, COL.white, COL.yel2); txt(273, 168 - b, st.stage === 0 ? 'つぎへ' : 'もう1回', 9, COL.ink, 'center'); }
+  else txt(273, 168, `${st.stage+1} / 2`, 9, COL.muted, 'center');
+  // クリア演出
+  if (st.cleared[st.stage] && st.clearAt >= 0){
+    const k = Math.min(1, (t - st.clearAt) / .35), sc = k < 1 ? .4 + k*.8 : 1.2 - Math.min(.2, (t - st.clearAt - .35));
+    ctx.save(); ctx.translate(130*S, 155*S); ctx.scale(sc, sc); txt(0, -10, 'クリア！', 18, COL.yel, 'center', COL.ink); ctx.restore();
+    for (let i = 0; i < 6; i++){ const a = i*Math.PI/3 + t; const r = 50 + 6*Math.sin(t*5 + i); const x = 130 + r*Math.cos(a)*1.3, y = 155 + r*Math.sin(a)*.25; R(x-2, y, 5, 1, COL.white); R(x, y-2, 1, 5, COL.white); }
+  }
+  // ボルルの吹き出し
+  if (st.msg.bor){
+    rbox(316, 112, 388, 130, st.msg.who === 'ボルル' ? '#ffe0e0' : COL.white, null, COL.gry);
+    R(346, 130, 7, 1, st.msg.who === 'ボルル' ? '#ffe0e0' : COL.white); R(347, 131, 5, 1, COL.ink); R(348, 131, 3, 1, COL.white); R(349, 132, 1, 1, COL.ink);
+    txt(352, 115.5, st.msg.bor, 9, st.msg.who === 'ボルル' ? COL.red2 : COL.ink, 'center');
+  }
+  // メッセージ
+  txt(41, 208, st.msg.who, 10, COL.ink, 'center');
+  st.msg.lines.forEach((ln, i) => txt(20, 226 + i*17, ln, 12));
+  if (Math.floor(t*2) % 2) { ctx.fillStyle = COL.yel; ctx.beginPath(); ctx.moveTo(456*S, 254*S); ctx.lineTo(464*S, 254*S); ctx.lineTo(460*S, 259*S); ctx.fill(); }
+  if (st.cursor) drawHand(st.cursor.x, st.cursor.y, st.cursor.pressed);
+}
+
+// ---------- 操作 ----------
+function toUnit(e){ const r = cv.getBoundingClientRect(); return {x:(e.clientX - r.left)/r.width*UW, y:(e.clientY - r.top)/r.height*UH}; }
+function nearNode(u, tol = 9){
+  const i = Math.round((u.x - 34)/24), j = Math.round((u.y - 58)/24);
+  if (i < 0 || j < 0 || i >= NI || j >= NJ) return null;
+  return Math.hypot(u.x - GX(i), u.y - GY(j)) <= tol ? [i, j] : null;
+}
+function nearEdge(u){
+  let best = null, bd = 7;
+  const j = Math.round((u.y - 58)/24), i = Math.floor((u.x - 34)/24);
+  if (i >= 0 && i < NI-1 && j >= 0 && j < NJ){ const d = Math.abs(u.y - GY(j)); const k = edgeKey(i, j, 'h'); if (d < bd && validEdge(k)){ bd = d; best = k; } }
+  const i2 = Math.round((u.x - 34)/24), j2 = Math.floor((u.y - 58)/24);
+  if (i2 >= 0 && i2 < NI && j2 >= 0 && j2 < NJ-1){ const d = Math.abs(u.x - GX(i2)); const k = edgeKey(i2, j2, 'v'); if (d < bd && validEdge(k)){ bd = d; best = k; } }
+  return best;
+}
+function edgeBetween(a, b){
+  if (a[1] === b[1] && Math.abs(a[0]-b[0]) === 1) return edgeKey(Math.min(a[0], b[0]), a[1], 'h');
+  if (a[0] === b[0] && Math.abs(a[1]-b[1]) === 1) return edgeKey(a[0], Math.min(a[1], b[1]), 'v');
+  return null;
+}
+function addWire(k){ if (k && validEdge(k) && !st.wires.has(k) && st.wires.size < STAGES[st.stage].limit){ st.wires.add(k); return true; } return false; }
+function inRect(u, x0, y0, x1, y1){ return u.x >= x0 && u.x <= x1 && u.y >= y0 && u.y <= y1; }
+function switchHit(u){ const p = STAGES[st.stage].parts.find(q => q.type === 'sw'); return inRect(u, GX(p.a[0])+2, GY(p.a[1])-16, GX(p.b[0])-2, GY(p.a[1])+12); }
+function setStage(n){ st.stage = n; st.wires = new Set(); st.swOn = false; st.clearAt = -1; st.cleared[n] = false; evaluate(clock()); }
+function clock(){ return performance.now()/1000; }
+
+let drag = null;
+if (!DEMO){
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId);
+    const u = toUnit(e); drag = {start:u, node:nearNode(u), added:0};
+  });
+  cv.addEventListener('pointermove', e => {
+    const u = toUnit(e);
+    st.hover = drag ? null : nearEdge(u);
+    if (!drag || !drag.node) return;
+    const n = nearNode(u, 10);
+    if (n && (n[0] !== drag.node[0] || n[1] !== drag.node[1])){
+      const k = edgeBetween(drag.node, n);
+      if (k){ if (addWire(k)) { drag.added++; evaluate(clock()); } drag.node = n; }
+    }
+  });
+  cv.addEventListener('pointerleave', () => { st.hover = null; });
+  cv.addEventListener('pointerup', e => {
+    const u = toUnit(e);
+    if (drag && drag.added === 0){
+      if (inRect(u, 255, 140, 291, 158)) setStage(st.stage);
+      else if (st.cleared[st.stage] && inRect(u, 255, 162, 291, 184)) setStage(st.stage === 0 ? 1 : 0);
+      else if (switchHit(u)){ st.swOn = !st.swOn; evaluate(clock()); }
+      else { const k = nearEdge(u); if (k){ if (st.wires.has(k)) st.wires.delete(k); else addWire(k); evaluate(clock()); } }
+    }
+    drag = null;
+  });
+  cv.addEventListener('keydown', e => { if (e.key === ' ' || e.key === 'Enter'){ st.swOn = !st.swOn; evaluate(clock()); e.preventDefault(); } });
+}
+
+// ---------- デモ（GIF用・決まった手順を1コマずつ描く） ----------
+const DEMO_BASE = ['1,1,v','1,2,v','1,3,v','1,4,v','1,1,h','2,1,h','5,1,h','6,1,h','7,1,v','7,2,v','7,3,v','7,4,v','3,5,h','4,5,h'];
+const DEMO_ADD = [[35,'1,3,h'],[41,'2,3,h'],[58,'5,3,h'],[64,'6,3,h']];
+const DEMO_CUR = [[0,330,150,0],[12,178,176,0],[13,178,176,1],[15,178,176,1],[16,178,176,0],[28,58,130,0],[29,58,130,1],[41,106,130,1],[42,106,130,0],[52,154,130,0],[53,154,130,1],[64,202,130,1],[65,202,130,0],[80,330,160,0],[200,330,160,0]];
+function demoFrame(f){
+  const FPS = 12, t = f / FPS;
+  st.stage = 1; st.cleared = [true, false]; st.clearAt = -1;
+  st.wires = new Set(DEMO_BASE); for (const [ff, k] of DEMO_ADD) if (f >= ff) st.wires.add(k);
+  st.swOn = f >= 14;
+  // クリアした瞬間の時刻を再現
+  let clearFrame = -1;
+  for (let g = 0; g <= f; g++){
+    const w = new Set(DEMO_BASE); for (const [ff, k] of DEMO_ADD) if (g >= ff) w.add(k);
+    if (w.size === DEMO_BASE.length + DEMO_ADD.length && g >= 14){ clearFrame = g; break; }
+  }
+  evaluate(clearFrame >= 0 ? clearFrame / FPS : t);
+  if (clearFrame < 0) { st.cleared[1] = false; st.clearAt = -1; }
+  let c = DEMO_CUR[0];
+  for (let i = 0; i < DEMO_CUR.length - 1; i++){
+    const [f0, x0, y0, p0] = DEMO_CUR[i], [f1, x1, y1] = DEMO_CUR[i+1];
+    if (f >= f0 && f < f1){ const k = (f - f0)/(f1 - f0), e = k < .5 ? 2*k*k : 1 - Math.pow(-2*k + 2, 2)/2; c = [f, x0 + (x1-x0)*e, y0 + (y1-y0)*e, p0]; break; }
+  }
+  st.cursor = {x:Math.round(c[1]), y:Math.round(c[2]), pressed:!!c[3]};
+  draw(t);
+}
+
+async function start(){
+  try { await document.fonts.load(`24px "DotGothic16"`); } catch (_) {}
+  if (!document.fonts.check(`24px "DotGothic16"`)) FONT = '"Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif';
+  await new Promise(r => bg.complete ? r() : (bg.onload = r));
+  if (DEMO){ demoFrame(+params.get('demo') || 0); document.title = 'ready'; return; }
+  evaluate(clock());
+  const loop = () => { draw(clock()); requestAnimationFrame(loop); };
+  loop();
+}
+start();
+})();
+</script>
+
+</html>
